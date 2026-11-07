@@ -1,0 +1,162 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LG OW | Guild Control</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#080d18;color:#eaf3ff;font-family:Arial,sans-serif}
+header{padding:22px;background:#101b30;border-bottom:1px solid #203c60}
+h1{margin:0;color:#00d5ff;letter-spacing:3px}
+small{color:#91a8c5}
+main{max-width:850px;margin:auto;padding:18px}
+.card{background:#111d32;border:1px solid #243b5c;border-radius:14px;padding:18px;margin:16px 0}
+h2{color:#00d5ff;font-size:17px}
+input,button{width:100%;padding:13px;margin:7px 0;border-radius:8px;border:1px solid #345273;background:#091426;color:white}
+button{background:#007ca8;border:0;font-weight:bold;cursor:pointer}
+button.secondary{background:#253953}
+.stat{font-size:30px;color:#00d5ff;font-weight:bold}
+.entry{padding:12px 0;border-bottom:1px solid #263c58}
+label{font-size:13px;color:#9db5d3}
+#status{color:#ffca70;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<header>
+<h1>LG OW</h1>
+<small>FREE FIRE • GUILD CONTROL PANEL</small>
+</header>
+
+<main>
+<div class="card">
+<h2>SERVER CONNECTION</h2>
+<label>Backend URL</label>
+<input id="api" placeholder="https://your-server.onrender.com">
+<label>Admin Token</label>
+<input id="token" type="password" placeholder="Your admin token">
+<button onclick="connect()">CONNECT SERVER</button>
+<p id="status">Not connected</p>
+</div>
+
+<div class="card">
+<h2>GUILD OVERVIEW</h2>
+<div class="stat" id="total">0</div>
+<small>Total recorded Glory</small>
+<p id="guild">Guild: LG OW</p>
+<button class="secondary" onclick="refresh()">REFRESH DATA</button>
+</div>
+
+<div class="card">
+<h2>GUILD SETTINGS</h2>
+<input id="gname" placeholder="Guild name">
+<input id="guid" placeholder="Guild UID">
+<input id="region" placeholder="Region">
+<button onclick="saveGuild()">SAVE GUILD</button>
+</div>
+
+<div class="card">
+<h2>ADD GLORY RECORD</h2>
+<input id="member" placeholder="Member name">
+<input id="uid" placeholder="Member UID">
+<input id="glory" type="number" min="0" step="1" placeholder="Glory amount">
+<input id="note" placeholder="Note (optional)">
+<button onclick="addGlory()">ADD RECORD</button>
+</div>
+
+<div class="card">
+<h2>RECENT GLORY RECORDS</h2>
+<div id="entries">Connect server to load records.</div>
+</div>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+
+function base(){
+ return $("api").value.trim().replace(/\/+$/,"");
+}
+
+async function request(path,method="GET",body=null){
+ const headers={"Content-Type":"application/json"};
+ if(method!=="GET") headers["x-admin-token"]=$("token").value;
+ const response=await fetch(base()+path,{
+  method,headers,
+  body:body?JSON.stringify(body):undefined
+ });
+ const data=await response.json();
+ if(!response.ok) throw new Error(data.error||"Request failed");
+ return data;
+}
+
+async function connect(){
+ try{
+  if(!base()) throw new Error("Backend URL enter karo");
+  const result=await request("/api/health");
+  $("status").textContent="Connected: "+result.service;
+  await refresh();
+ }catch(e){
+  $("status").textContent="Connection failed: "+e.message;
+ }
+}
+
+async function refresh(){
+ try{
+  const [guild,glory]=await Promise.all([
+   request("/api/guild"),request("/api/glory")
+  ]);
+  $("guild").textContent="Guild: "+guild.guild_name+" | "+guild.region;
+  $("total").textContent=Number(glory.total_glory).toLocaleString();
+  $("gname").value=guild.guild_name;
+  $("guid").value=guild.guild_uid;
+  $("region").value=guild.region;
+  $("entries").innerHTML="";
+  if(!glory.entries.length){
+   $("entries").textContent="No records yet.";
+  }
+  glory.entries.forEach(item=>{
+   const div=document.createElement("div");
+   div.className="entry";
+   div.textContent=item.member_name+" — "+Number(item.glory).toLocaleString()+" Glory";
+   $("entries").appendChild(div);
+  });
+ }catch(e){
+  $("status").textContent="Load failed: "+e.message;
+ }
+}
+
+async function saveGuild(){
+ try{
+  await request("/api/guild","PUT",{
+   guild_name:$("gname").value,
+   guild_uid:$("guid").value,
+   region:$("region").value
+  });
+  alert("Guild settings saved!");
+  await refresh();
+ }catch(e){alert(e.message)}
+}
+
+async function addGlory(){
+ try{
+  const amount=Number($("glory").value);
+  if(!Number.isSafeInteger(amount)||amount<0)
+   throw new Error("Valid Glory amount enter karo");
+  await request("/api/glory","POST",{
+   member_name:$("member").value,
+   member_uid:$("uid").value,
+   glory:amount,
+   note:$("note").value
+  });
+  alert("Glory record added!");
+  $("member").value="";
+  $("uid").value="";
+  $("glory").value="";
+  $("note").value="";
+  await refresh();
+ }catch(e){alert(e.message)}
+}
+</script>
+</body>
+</html>
